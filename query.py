@@ -11,6 +11,7 @@ COLLECTION_NAME = "cosense"
 MODEL_NAME = "intfloat/multilingual-e5-small"
 TOP_N = 5
 SNIPPET_CHARS = 300
+PRECISION_THRESHOLD = 0.5  # この類似度以上を「関連あり」とみなす
 
 
 # ── 埋め込み関数（クエリ側: "query: " プレフィックス） ───────────────────────────
@@ -50,10 +51,12 @@ def format_result(rank: int, distance: float, metadata: dict, document: str) -> 
     if len(snippet) > SNIPPET_CHARS:
         snippet = snippet[:SNIPPET_CHARS] + "..."
 
+    relevance_mark = "[o]" if score >= PRECISION_THRESHOLD else "[x]"
+
     return (
         f"\n{'─' * 60}\n"
         f"#{rank}  {title}{chunk_info}\n"
-        f"    類似度: {score:.3f}\n"
+        f"    類似度: {score:.3f}  {relevance_mark} {'関連あり' if score >= PRECISION_THRESHOLD else '関連なし'} (閾値: {PRECISION_THRESHOLD})\n"
         f"    {snippet}"
     )
 
@@ -106,7 +109,13 @@ def main():
     for rank, (doc, meta, dist) in enumerate(zip(documents, metadatas, distances), start=1):
         print(format_result(rank, dist, meta, doc))
 
+    # Precision@N: 関連ありチャンク数 / 取得件数
+    scores = [1.0 - d for d in distances]
+    relevant_count = sum(1 for s in scores if s >= PRECISION_THRESHOLD)
+    precision = relevant_count / len(scores)
+
     print(f"\n{'─' * 60}")
+    print(f"Precision@{TOP_N}: {relevant_count}/{len(scores)} = {precision:.2f}  (類似度 >= {PRECISION_THRESHOLD} を「関連あり」と判定)")
 
 
 if __name__ == "__main__":
